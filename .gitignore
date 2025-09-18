@@ -1,0 +1,30 @@
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Go build
+bin/
+vendor/
+
+# Node
+node_modules/
+dist/
+build/
+
+# Env
+.env
+
+# Docker
+*.pid
+pgdata/
+
+# Misc
+.DS_Store
+.vscode/
+.idea/
+'@ | Set-Content -Encoding UTF8 .gitignore

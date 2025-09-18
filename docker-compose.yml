@@ -1,0 +1,46 @@
+﻿services:
+  db:
+    image: postgres:16
+    container_name: password-danie-db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: vault
+    volumes:
+      - password_danie_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d vault"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+      start_period: 3s
+    restart: unless-stopped
+
+  api:
+    container_name: password-danie-api
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    env_file: .env
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  web:
+    container_name: password-danie-web
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: "http://api:8080"
+    ports:
+      - "3000:80"
+    depends_on:
+      - api
+    restart: unless-stopped
+
+volumes:
+  password_danie_pgdata:

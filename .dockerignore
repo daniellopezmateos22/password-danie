@@ -1,0 +1,19 @@
+# Archivos innecesarios para la build del API
+.git
+.gitignore
+Dockerfile
+docker-compose.yml
+docker-compose.override.yml
+README.md
+*.md
+*.log
+*.env
+*.env.local
+tmp/
+*.swp
+
+# Go cache & bin
+bin/
+*.exe
+*.out
+*.test

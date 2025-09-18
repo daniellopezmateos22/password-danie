@@ -1,0 +1,11 @@
+# Archivos innecesarios para la build del Frontend
+.git
+.gitignore
+Dockerfile
+node_modules
+build
+dist
+*.md
+*.log
+*.env
+*.env.local

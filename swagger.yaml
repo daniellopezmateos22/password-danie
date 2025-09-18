@@ -1,0 +1,333 @@
+openapi: 3.0.3
+info:
+  title: password-danie API
+  version: 1.0.0
+  description: >
+    Gestor de contraseñas simple en Go (Gin + GORM + Postgres).
+    Autenticación JWT. Contraseñas cifradas (AES-256 GCM).
+servers:
+  - url: http://localhost:8080
+paths:
+  /health:
+    get:
+      summary: Health check
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+
+  /auth/register:
+    post:
+      summary: Registro de usuario
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: Usuario creado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: integer, example: 1 }
+                  email: { type: string, example: user@example.com }
+        '409':
+          description: Email ya registrado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /auth/login:
+    post:
+      summary: Login (devuelve JWT)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LoginRequest' }
+      responses:
+        '200':
+          description: Token JWT
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TokenResponse' }
+        '401':
+          description: Credenciales inválidas
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /auth/forgot:
+    post:
+      summary: Solicita reset de contraseña (demo devuelve token)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ForgotRequest' }
+      responses:
+        '200':
+          description: Token de reset generado (demo)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string, example: token generado }
+                  reset_token: { type: string, example: abc123def456 }
+
+  /auth/reset:
+    post:
+      summary: Resetea contraseña con token temporal
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ResetRequest' }
+      responses:
+        '200':
+          description: Password actualizada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string, example: password actualizada }
+        '400':
+          description: Token inválido o expirado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /api/vault:
+    get:
+      summary: Lista elementos del vault del usuario
+      security: [ { bearerAuth: [] } ]
+      parameters:
+        - name: q
+          in: query
+          schema: { type: string }
+          description: Búsqueda por título o URL (ILIKE)
+        - name: domain
+          in: query
+          schema: { type: string }
+          description: Filtra por dominio (coincidencia en URL)
+      responses:
+        '200':
+          description: Lista de items (sin exponer password/notes en claro)
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/VaultItem' }
+        '401':
+          description: Sin token o token inválido
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+    post:
+      summary: Crea un elemento en el vault
+      security: [ { bearerAuth: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/VaultItemCreate' }
+      responses:
+        '201':
+          description: Item creado (campos cifrados no se devuelven en claro)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/VaultItem' }
+        '401':
+          description: Sin token o token inválido
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /api/vault/{id}:
+    get:
+      summary: Obtiene un item (devuelve password y notes descifrados)
+      security: [ { bearerAuth: [] } ]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Detalle de item con secretos en claro
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/VaultItemDetail' }
+        '401':
+          description: Sin token o token inválido
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '404':
+          description: No encontrado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+    patch:
+      summary: Actualiza campos del item (re-cifra si cambian)
+      security: [ { bearerAuth: [] } ]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/VaultItemUpdate' }
+      responses:
+        '200':
+          description: Item actualizado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/VaultItem' }
+        '401':
+          description: Sin token o token inválido
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '404':
+          description: No encontrado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+    delete:
+      summary: Elimina un item del vault
+      security: [ { bearerAuth: [] } ]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Eliminado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deleted: { type: string, example: "1" }
+        '401':
+          description: Sin token o token inválido
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '404':
+          description: No encontrado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          example: token requerido
+
+    RegisterRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, format: email, example: user@example.com }
+        password: { type: string, format: password, example: secret123 }
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string, format: password }
+
+    TokenResponse:
+      type: object
+      properties:
+        token: { type: string, example: eyJhbGciOi... }
+
+    ForgotRequest:
+      type: object
+      required: [email]
+      properties:
+        email: { type: string, format: email }
+
+    ResetRequest:
+      type: object
+      required: [token, newPassword]
+      properties:
+        token: { type: string, example: abc123def456 }
+        newPassword: { type: string, format: password, example: NewP@ssw0rd! }
+
+    VaultItem:
+      type: object
+      description: Representación pública (sin secretos en claro)
+      properties:
+        id:       { type: integer, example: 1 }
+        title:    { type: string, example: GitHub }
+        username: { type: string, example: daniel }
+        url:      { type: string, example: https://github.com }
+        icon:     { type: string, example: gh }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    VaultItemCreate:
+      type: object
+      required: [title, username, password]
+      properties:
+        title:    { type: string }
+        username: { type: string }
+        password: { type: string, format: password }
+        url:      { type: string }
+        notes:    { type: string }
+        icon:     { type: string }
+
+    VaultItemUpdate:
+      type: object
+      properties:
+        title:    { type: string }
+        username: { type: string }
+        password: { type: string, format: password }
+        url:      { type: string }
+        notes:    { type: string }
+        icon:     { type: string }
+
+    VaultItemDetail:
+      type: object
+      description: Detalle con secretos en claro (solo GET /api/vault/{id})
+      properties:
+        id:       { type: integer, example: 1 }
+        title:    { type: string, example: GitHub }
+        username: { type: string, example: daniel }
+        password: { type: string, example: P@ssw0rd! }
+        url:      { type: string, example: https://github.com }
+        notes:    { type: string, example: cuenta personal }
+        icon:     { type: string, example: gh }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
