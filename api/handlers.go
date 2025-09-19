@@ -3,15 +3,41 @@ package api
 import (
 	"strings"
 	"time"
+	"strconv" 
 
 	"github.com/gin-gonic/gin"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 
+	"crypto/rand"
+    "encoding/base64"
+	
 	"github.com/daniellopezmateos22/password-danie/internal/auth"
 	"github.com/daniellopezmateos22/password-danie/internal/crypto"
 	"github.com/daniellopezmateos22/password-danie/internal/models"
 )
+
+type vaultOut struct {
+    ID        uint      `json:"id"`
+    Title     string    `json:"title"`
+    Username  string    `json:"username"`
+    URL       string    `json:"url,omitempty"`
+    Icon      string    `json:"icon,omitempty"`
+    CreatedAt time.Time `json:"created_at"`
+    UpdatedAt time.Time `json:"updated_at"`
+}
+
+func toVaultOut(v models.VaultItem) vaultOut {
+    return vaultOut{
+        ID:        v.ID,
+        Title:     v.Title,
+        Username:  v.Username,
+        URL:       v.URL,
+        Icon:      v.Icon,
+        CreatedAt: v.CreatedAt,
+        UpdatedAt: v.UpdatedAt,
+    }
+}
 
 func Routes(r *gin.Engine, db *gorm.DB) {
 	r.GET("/health", func(c *gin.Context) { c.JSON(200, gin.H{"status": "ok"}) })
@@ -30,6 +56,7 @@ func Routes(r *gin.Engine, db *gorm.DB) {
 		api.GET("/vault", listVault(db))
 		api.POST("/vault", createVault(db))
 		api.GET("/vault/:id", getVault(db))
+		api.GET("/vault/:id/reveal", revealVault(db)) 
 		api.PATCH("/vault/:id", updateVault(db))
 		api.DELETE("/vault/:id", deleteVault(db))
 	}
@@ -101,7 +128,10 @@ func forgotHandler(db *gorm.DB) gin.HandlerFunc {
 }
 
 func resetHandler(db *gorm.DB) gin.HandlerFunc {
-	type In struct{ Token, NewPassword string }
+	type In struct {
+		Token       string `json:"token"`
+		NewPassword string `json:"new_password"`
+	}
 	return func(c *gin.Context) {
 		var in In
 		if err := c.ShouldBindJSON(&in); err != nil || in.Token == "" || in.NewPassword == "" {
@@ -137,125 +167,164 @@ type vaultIn struct {
 }
 
 func listVault(db *gorm.DB) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		uid := c.GetUint("user_id")
-		var items []models.VaultItem
-		q := db.Where("user_id = ?", uid)
-		if s := c.Query("q"); s != "" {
-			like := "%" + s + "%"
-			q = q.Where("title ILIKE ? OR url ILIKE ?", like, like)
-		}
-		if domain := c.Query("domain"); domain != "" {
-			like := "%://" + domain + "%"
-			q = q.Where("url ILIKE ?", like)
-		}
-		if err := q.Order("id desc").Find(&items).Error; err != nil {
-			c.JSON(500, gin.H{"error": "db error"})
-			return
-		}
-		c.JSON(200, items)
-	}
+    return func(c *gin.Context) {
+        uid := c.GetUint("user_id")
+        var items []models.VaultItem
+
+        q := db.Where("user_id = ?", uid)
+
+        if s := c.Query("q"); s != "" {
+            like := "%" + s + "%"
+            q = q.Where("title ILIKE ? OR url ILIKE ?", like, like)
+        }
+        if domain := c.Query("domain"); domain != "" {
+            like := "%://" + domain + "%"
+            q = q.Where("url ILIKE ?", like)
+        }
+
+        // paginación y orden
+        limitStr := c.DefaultQuery("limit", "50")
+        offsetStr := c.DefaultQuery("offset", "0")
+        limit, _ := strconv.Atoi(limitStr)
+        offset, _ := strconv.Atoi(offsetStr)
+        if limit <= 0 || limit > 200 { limit = 50 }
+        if offset < 0 { offset = 0 }
+
+        sort := c.DefaultQuery("sort", "updated_desc")
+        switch sort {
+        case "updated_desc":
+            q = q.Order("updated_at desc")
+        case "created_desc":
+            q = q.Order("created_at desc")
+        default:
+            q = q.Order("id desc")
+        }
+
+        if err := q.Limit(limit).Offset(offset).Find(&items).Error; err != nil {
+            c.JSON(500, gin.H{"error": "db error"})
+            return
+        }
+        c.JSON(200, items)
+    }
 }
+
+
 
 func createVault(db *gorm.DB) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		uid := c.GetUint("user_id")
-		var in vaultIn
-		if err := c.ShouldBindJSON(&in); err != nil {
-			c.JSON(400, gin.H{"error": err.Error()})
-			return
-		}
-		pc, _ := crypto.Encrypt([]byte(in.Password))
-		nc, _ := crypto.Encrypt([]byte(in.Notes))
-		item := models.VaultItem{
-			UserID:    uid,
-			Title:     in.Title,
-			Username:  in.Username,
-			PasswordC: pc,
-			URL:       in.URL,
-			NotesC:    nc,
-			Icon:      in.Icon,
-		}
-		if err := db.Create(&item).Error; err != nil {
-			c.JSON(500, gin.H{"error": "db error"})
-			return
-		}
-		c.JSON(201, item)
-	}
+    return func(c *gin.Context) {
+        uid := c.GetUint("user_id")
+        var in vaultIn
+        if err := c.ShouldBindJSON(&in); err != nil {
+            c.JSON(400, gin.H{"error": err.Error()})
+            return
+        }
+
+        pc, err := crypto.Encrypt([]byte(in.Password))
+        if err != nil {
+            c.JSON(500, gin.H{"error": "encrypt password error"})
+            return
+        }
+        var nc []byte
+        if in.Notes != "" {
+            nc, err = crypto.Encrypt([]byte(in.Notes))
+            if err != nil {
+                c.JSON(500, gin.H{"error": "encrypt notes error"})
+                return
+            }
+        }
+
+        item := models.VaultItem{
+            UserID:    uid,
+            Title:     in.Title,
+            Username:  in.Username,
+            PasswordC: pc,
+            URL:       in.URL,
+            NotesC:    nc,
+            Icon:      in.Icon,
+        }
+        if err := db.Create(&item).Error; err != nil {
+            c.JSON(500, gin.H{"error": "db error"})
+            return
+        }
+        c.JSON(201, toVaultOut(item))
+    }
 }
+
 
 func getVault(db *gorm.DB) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		uid := c.GetUint("user_id")
-		var item models.VaultItem
-		if err := db.Where("user_id = ? AND id = ?", uid, c.Param("id")).First(&item).Error; err != nil {
-			c.JSON(404, gin.H{"error": "no encontrado"})
-			return
-		}
-		pass, _ := crypto.Decrypt(item.PasswordC)
-		notes, _ := crypto.Decrypt(item.NotesC)
-		c.JSON(200, gin.H{
-			"id":        item.ID,
-			"title":     item.Title,
-			"username":  item.Username,
-			"password":  string(pass),
-			"url":       item.URL,
-			"notes":     string(notes),
-			"icon":      item.Icon,
-			"createdAt": item.CreatedAt,
-			"updatedAt": item.UpdatedAt,
-		})
-	}
+    return func(c *gin.Context) {
+        uid := c.GetUint("user_id")
+        var item models.VaultItem
+        if err := db.Where("user_id = ? AND id = ?", uid, c.Param("id")).First(&item).Error; err != nil {
+            c.JSON(404, gin.H{"error": "no encontrado"})
+            return
+        }
+        c.JSON(200, toVaultOut(item))
+    }
 }
 
+
 func updateVault(db *gorm.DB) gin.HandlerFunc {
-	type inPatch struct {
-		Title    *string `json:"title"`
-		Username *string `json:"username"`
-		Password *string `json:"password"`
-		URL      *string `json:"url"`
-		Notes    *string `json:"notes"`
-		Icon     *string `json:"icon"`
-	}
-	return func(c *gin.Context) {
-		uid := c.GetUint("user_id")
-		var item models.VaultItem
-		if err := db.Where("user_id = ? AND id = ?", uid, c.Param("id")).First(&item).Error; err != nil {
-			c.JSON(404, gin.H{"error": "no encontrado"})
-			return
-		}
-		var in inPatch
-		if err := c.ShouldBindJSON(&in); err != nil {
-			c.JSON(400, gin.H{"error": err.Error()})
-			return
-		}
-		if in.Title != nil {
-			item.Title = *in.Title
-		}
-		if in.Username != nil {
-			item.Username = *in.Username
-		}
-		if in.Password != nil {
-			pc, _ := crypto.Encrypt([]byte(*in.Password))
-			item.PasswordC = pc
-		}
-		if in.URL != nil {
-			item.URL = *in.URL
-		}
-		if in.Notes != nil {
-			nc, _ := crypto.Encrypt([]byte(*in.Notes))
-			item.NotesC = nc
-		}
-		if in.Icon != nil {
-			item.Icon = *in.Icon
-		}
-		if err := db.Save(&item).Error; err != nil {
-			c.JSON(500, gin.H{"error": "db error"})
-			return
-		}
-		c.JSON(200, item)
-	}
+    type inPatch struct {
+        Title    *string `json:"title"`
+        Username *string `json:"username"`
+        Password *string `json:"password"`
+        URL      *string `json:"url"`
+        Notes    *string `json:"notes"`
+        Icon     *string `json:"icon"`
+    }
+    return func(c *gin.Context) {
+        uid := c.GetUint("user_id")
+        var item models.VaultItem
+        if err := db.Where("user_id = ? AND id = ?", uid, c.Param("id")).First(&item).Error; err != nil {
+            c.JSON(404, gin.H{"error": "no encontrado"})
+            return
+        }
+        var in inPatch
+        if err := c.ShouldBindJSON(&in); err != nil {
+            c.JSON(400, gin.H{"error": err.Error()})
+            return
+        }
+        if in.Title != nil {
+            item.Title = *in.Title
+        }
+        if in.Username != nil {
+            item.Username = *in.Username
+        }
+        if in.Password != nil {
+            pc, err := crypto.Encrypt([]byte(*in.Password))
+            if err != nil {
+                c.JSON(500, gin.H{"error": "encrypt password error"})
+                return
+            }
+            item.PasswordC = pc
+        }
+        if in.URL != nil {
+            item.URL = *in.URL
+        }
+        if in.Notes != nil {
+            var nc []byte
+            if *in.Notes != "" {
+                var err error
+                nc, err = crypto.Encrypt([]byte(*in.Notes))
+                if err != nil {
+                    c.JSON(500, gin.H{"error": "encrypt notes error"})
+                    return
+                }
+            }
+            item.NotesC = nc
+        }
+        if in.Icon != nil {
+            item.Icon = *in.Icon
+        }
+        if err := db.Save(&item).Error; err != nil {
+            c.JSON(500, gin.H{"error": "db error"})
+            return
+        }
+        c.JSON(200, toVaultOut(item))
+    }
 }
+
 
 func deleteVault(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -273,12 +342,29 @@ func deleteVault(db *gorm.DB) gin.HandlerFunc {
 	}
 }
 
+func revealVault(db *gorm.DB) gin.HandlerFunc {
+    return func(c *gin.Context) {
+        uid := c.GetUint("user_id")
+        var item models.VaultItem
+        if err := db.Where("user_id = ? AND id = ?", uid, c.Param("id")).First(&item).Error; err != nil {
+            c.JSON(404, gin.H{"error": "no encontrado"})
+            return
+        }
+        pass, err := crypto.Decrypt(item.PasswordC)
+        if err != nil {
+            c.JSON(500, gin.H{"error": "decrypt error"})
+            return
+        }
+        c.JSON(200, gin.H{"password": string(pass)})
+    }
+}
+
 const letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 
 func RandToken(n int) string {
-	b := make([]byte, n)
-	for i := range b {
-		b[i] = letters[int(time.Now().UnixNano())%len(letters)]
-	}
-	return string(b)
+    b := make([]byte, n)
+    if _, err := rand.Read(b); err != nil {
+        return base64.RawURLEncoding.EncodeToString([]byte(time.Now().String()))[:n]
+    }
+    return base64.RawURLEncoding.EncodeToString(b)[:n]
 }
