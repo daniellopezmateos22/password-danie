@@ -33,6 +33,12 @@ func main() {
 	}
 	defer sqlDB.Close()
 
+
+	//  APLICAR MIGRACIONES
+	if err := db.ApplyMigrations(sqlDB, "/app/migrations"); err != nil {
+		log.Fatalf("apply migrations: %v", err)
+	}
+
 	// repos
 	var (
 		userRepo   repository.UserRepo   = sqliteRepo.NewUserSQLite(sqlDB)

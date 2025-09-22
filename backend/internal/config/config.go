@@ -4,7 +4,6 @@ package config
 import (
 	"log"
 	"os"
-	"strconv"
 	"time"
 
 	"github.com/joho/godotenv"

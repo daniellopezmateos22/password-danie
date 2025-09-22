@@ -142,8 +142,20 @@ func RegisterRoutes(r *gin.Engine, authUC *usecase.Auth, vaultUC *usecase.Vault,
 	})
 }
 
-// userIDFromClaims obtiene el "sub" de los claims y lo convierte a int64.
+// userIDFromClaims obtiene el userID preferentemente del contexto (middleware) y si no, de los claims.
 func userIDFromClaims(c *gin.Context) int64 {
+	// 1) Preferir el valor que dejó el middleware
+	if v, ok := c.Get(middleware.CtxUserID); ok {
+		switch t := v.(type) {
+		case int64:
+			return t
+		case int:
+			return int64(t)
+		case float64:
+			return int64(t)
+		}
+	}
+	// 2) Fallback: leer de los claims (por compatibilidad)
 	claims, ok := c.Get("claims")
 	if !ok {
 		return 0
@@ -159,7 +171,6 @@ func userIDFromClaims(c *gin.Context) int64 {
 		return v
 	case int:
 		return int64(v)
-	default:
-		return 0
 	}
+	return 0
 }
