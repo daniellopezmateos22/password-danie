@@ -1,5 +1,13 @@
 // cliente HTTP sencillo para la API; añade el token automáticamente.
-const BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8080";
+// src/api.ts
+// Detecta Codespaces: si no hay VITE_API_BASE_URL, cambia -5173 por -8080
+const origin = typeof window !== "undefined" ? window.location.origin : "";
+const guessApi = origin.includes("-5173.app.github.dev")
+  ? origin.replace("-5173.app.github.dev", "-8080.app.github.dev")
+  : "http://localhost:8080";
+
+const BASE_URL = (import.meta as any).env?.VITE_API_BASE_URL || guessApi;
+
 
 export function setToken(token: string | null) {
   if (token) localStorage.setItem("token", token);

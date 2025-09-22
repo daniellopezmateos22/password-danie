@@ -1,14 +1,15 @@
-// Comentario: registro de rutas HTTP con CORS global (dev), health/ready, auth, users/me y CRUD del vault.
+// internal/http/router.go
+// Registro de rutas HTTP con CORS (Codespaces/local), health/ready, auth, users/me y CRUD del vault.
 package http
 
 import (
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
-
 	"password-danie/internal/dto"
 	"password-danie/internal/middleware"
 	"password-danie/internal/usecase"
@@ -16,18 +17,32 @@ import (
 
 // RegisterRoutes registra endpoints públicos y protegidos sobre el *gin.Engine* recibido.
 func RegisterRoutes(r *gin.Engine, authUC *usecase.Auth, vaultUC *usecase.Vault, readyCheck func() error) {
-	// Evita warning de proxies y aplica CORS global (necesario para frontend en :5173)
+	// Evita warning de proxies y aplica CORS
 	_ = r.SetTrustedProxies(nil)
-	r.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{"http://localhost:5173", "http://127.0.0.1:5173"},
+
+	// CORS para local y Codespaces (*.app.github.dev)
+	corsCfg := cors.Config{
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
 		ExposeHeaders:    []string{"Content-Length"},
 		AllowCredentials: true,
 		MaxAge:           12 * time.Hour,
-	}))
+	}
+	corsCfg.AllowOriginFunc = func(origin string) bool {
+		// Local dev
+		if origin == "http://localhost:5173" || origin == "https://localhost:5173" {
+			return true
+		}
+		// GitHub Codespaces (cualquier subdominio)
+		// Ej: https://<name>-5173.app.github.dev
+		if strings.HasSuffix(origin, ".app.github.dev") {
+			return true
+		}
+		return false
+	}
+	r.Use(cors.New(corsCfg))
 
-	// Catch-all OPTIONS para preflight; evita 404 del navegador en CORS
+	// Catch-all OPTIONS para preflight (evita 404 en preflight)
 	r.OPTIONS("/*path", func(c *gin.Context) {
 		c.Status(http.StatusNoContent)
 	})
