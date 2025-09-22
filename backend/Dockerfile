@@ -1,12 +1,10 @@
 FROM golang:1.22-alpine AS build
-RUN apk add --no-cache build-base
 WORKDIR /app
-COPY go.mod ./
-COPY go.sum ./
+COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
 RUN go mod tidy
-RUN CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -o server ./cmd/server
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o server ./cmd/server
 
 FROM alpine:3.20
 WORKDIR /app

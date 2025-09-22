@@ -4,11 +4,11 @@ package db
 
 import (
     "database/sql"
-    _ "github.com/mattn/go-sqlite3"
+   _ "modernc.org/sqlite"
 )
 
 func OpenSQLite(dsn string) (*sql.DB, error) {
-    db, err := sql.Open("sqlite3", dsn+"?_foreign_keys=on&_busy_timeout=5000")
+    db, err := sql.Open("sqlite", dsn+"?_foreign_keys=on&_busy_timeout=5000")
     if err != nil {
         return nil, err
     }

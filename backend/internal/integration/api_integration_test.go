@@ -11,7 +11,7 @@ import (
 	"strconv"
 	"testing"
 
-	_ "github.com/mattn/go-sqlite3"
+	_ "modernc.org/sqlite"
 	"github.com/gin-gonic/gin"
 
 	api "password-danie/internal/http"
@@ -107,7 +107,7 @@ func Test_FullAPI_HappyPath(t *testing.T) {
 	_ = os.Setenv("AES_KEY", "0123456789abcdef0123456789abcdef")
 
 	// DB en memoria
-	sqlDB, err := sql.Open("sqlite3", ":memory:")
+	sqlDB, err := sql.Open("sqlite", ":memory:")
 	if err != nil {
 		t.Fatalf("open sqlite mem: %v", err)
 	}
