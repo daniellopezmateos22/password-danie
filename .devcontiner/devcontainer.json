@@ -1,0 +1,26 @@
+{
+  "name": "password-danie",
+  "image": "mcr.microsoft.com/devcontainers/go:1-ubuntu-24.04",
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {}
+  },
+  "postCreateCommand": "cd backend && go mod download && cd ../frontend && npm ci",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "golang.Go",
+        "ms-azuretools.vscode-docker",
+        "esbenp.prettier-vscode",
+        "ms-vscode.vscode-typescript-next"
+      ],
+      "settings": {
+        "go.useLanguageServer": true
+      }
+    }
+  },
+  "forwardPorts": [8080, 5173],
+  "portsAttributes": {
+    "8080": { "label": "backend (Gin)", "requireLocalPort": false },
+    "5173": { "label": "frontend (Vite)", "requireLocalPort": false }
+  }
+}
