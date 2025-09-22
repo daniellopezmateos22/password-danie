@@ -1,4 +1,4 @@
-// pantalla de Vault con acciones claras: Create, Read, Search/List, Update, Delete.
+// pantalla de Vault con acciones claras: Create, Read, Search/List (q + domain), Update, Delete.
 import { useEffect, useState } from "react";
 import { api } from "../api";
 
@@ -15,6 +15,7 @@ type Secret = {
 
 export default function VaultPage() {
   const [q, setQ] = useState("");
+  const [domain, setDomain] = useState(""); // <<--- NUEVO: filtro por dominio
   const [items, setItems] = useState<Secret[]>([]);
   const [total, setTotal] = useState(0);
   const [message, setMessage] = useState<string | null>(null);
@@ -39,7 +40,7 @@ export default function VaultPage() {
   const load = async () => {
     setMessage(null);
     try {
-      const res = await api.listSecrets(q, 50, 0);
+      const res = await api.listSecrets(q, domain, 50, 0); // <<--- incluye domain
       setItems(res.items || []);
       setTotal(res.total || 0);
     } catch (e: any) {
@@ -47,7 +48,9 @@ export default function VaultPage() {
     }
   };
 
-  useEffect(() => { load(); /* auto-load al entrar */ }, []);
+  useEffect(() => {
+    load(); // auto-load al entrar
+  }, []);
 
   const onCreate = async () => {
     setMessage(null);
@@ -105,15 +108,27 @@ export default function VaultPage() {
       {/* SEARCH / LIST */}
       <section>
         <h3>Search / List</h3>
-        <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="q (buscar por título/url/username)" />
+        <div style={{ display: "flex", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="q (buscar por título/url/username)"
+            style={{ minWidth: 280 }}
+          />
+          {/* NUEVO: input de dominio */}
+          <input
+            value={domain}
+            onChange={(e) => setDomain(e.target.value)}
+            placeholder="domain (ej: github.com)"
+            style={{ minWidth: 240 }}
+          />
           <button onClick={load}>Buscar</button>
         </div>
         <div style={{ fontSize: 12, marginBottom: 8 }}>Total: {total}</div>
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
             <tr style={{ textAlign: "left", borderBottom: "1px solid #ddd" }}>
-              <th>ID</th><th>Title</th><th>Username</th><th>URL</th><th>Updated</th>
+              <th>ID</th><th>Title</th><th>Username</th><th>URL</th><th>Domain</th><th>Updated</th>
             </tr>
           </thead>
           <tbody>
@@ -123,6 +138,7 @@ export default function VaultPage() {
                 <td>{it.title || "-"}</td>
                 <td>{it.username}</td>
                 <td>{it.url || "-"}</td>
+                <td>{it.url ? new URL(it.url).hostname : "-"}</td>
                 <td>{it.updated_at ? new Date(it.updated_at).toLocaleString() : "-"}</td>
               </tr>
             ))}
@@ -156,7 +172,8 @@ export default function VaultPage() {
           <input
             value={readId}
             onChange={(e) => setReadId(e.target.value ? Number(e.target.value) : "")}
-            placeholder="id" type="number"
+            placeholder="id"
+            type="number"
           />
           <button onClick={onRead}>Read</button>
         </div>
@@ -175,12 +192,17 @@ export default function VaultPage() {
             <input
               value={updateId}
               onChange={(e) => setUpdateId(e.target.value ? Number(e.target.value) : "")}
-              placeholder="id" type="number"
+              placeholder="id"
+              type="number"
             />
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "140px 1fr", gap: 8 }}>
             <label>notes</label>
-            <input value={updateForm.notes || ""} onChange={(e) => setUpdateForm({ ...updateForm, notes: e.target.value })} placeholder="notes" />
+            <input
+              value={updateForm.notes || ""}
+              onChange={(e) => setUpdateForm({ ...updateForm, notes: e.target.value })}
+              placeholder="notes"
+            />
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "140px 1fr", gap: 8 }}>
             <label>password_plain</label>
@@ -202,7 +224,8 @@ export default function VaultPage() {
           <input
             value={deleteId}
             onChange={(e) => setDeleteId(e.target.value ? Number(e.target.value) : "")}
-            placeholder="id" type="number"
+            placeholder="id"
+            type="number"
           />
           <button onClick={onDelete} style={{ background: "#ffe8e8" }}>Delete</button>
         </div>

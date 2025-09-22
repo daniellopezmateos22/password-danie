@@ -32,11 +32,13 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ email, password }),
     }),
+
   login: (email: string, password: string) =>
     request<{ access_token: string; user: { id: number; email: string } }>("/api/v1/auth/login", {
       method: "POST",
       body: JSON.stringify({ email, password }),
     }),
+
   me: () => request<{ claims: Record<string, unknown> }>("/api/v1/users/me"),
 
   // vault
@@ -49,19 +51,30 @@ export const api = {
     title?: string;
   }) => request<{ id: number }>("/api/v1/vault/entries", { method: "POST", body: JSON.stringify(payload) }),
 
-  listSecrets: (q = "", limit = 20, offset = 0) =>
-    request<{ items: any[]; total: number }>(`/api/v1/vault/entries?q=${encodeURIComponent(q)}&limit=${limit}&offset=${offset}`),
+  // 
+  listSecrets: (q = "", domain = "", limit = 20, offset = 0) => {
+    const qs = new URLSearchParams();
+    if (q) qs.append("q", q);
+    if (domain) qs.append("domain", domain);
+    if (limit != null) qs.append("limit", String(limit));
+    if (offset != null) qs.append("offset", String(offset));
+    const suffix = qs.toString() ? `?${qs.toString()}` : "";
+    return request<{ items: any[]; total: number }>(`/api/v1/vault/entries${suffix}`);
+  },
 
   getSecret: (id: number) => request<any>(`/api/v1/vault/entries/${id}`),
 
-  updateSecret: (id: number, payload: Partial<{
-    username: string;
-    password_plain: string;
-    url: string;
-    notes: string;
-    icon: string;
-    title: string;
-  }>) => request(`/api/v1/vault/entries/${id}`, { method: "PUT", body: JSON.stringify(payload) }),
+  updateSecret: (
+    id: number,
+    payload: Partial<{
+      username: string;
+      password_plain: string;
+      url: string;
+      notes: string;
+      icon: string;
+      title: string;
+    }>
+  ) => request(`/api/v1/vault/entries/${id}`, { method: "PUT", body: JSON.stringify(payload) }),
 
   deleteSecret: (id: number) => request(`/api/v1/vault/entries/${id}`, { method: "DELETE" }),
 };
