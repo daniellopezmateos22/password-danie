@@ -1,17 +1,38 @@
-// Registro de rutas HTTP (Gin): health/ready, auth, users/me y CRUD del vault.
+// Comentario: registro de rutas HTTP con CORS global (dev), health/ready, auth, users/me y CRUD del vault.
 package http
 
 import (
 	"net/http"
 	"strconv"
+	"time"
 
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+
 	"password-danie/internal/dto"
 	"password-danie/internal/middleware"
 	"password-danie/internal/usecase"
 )
 
+// RegisterRoutes registra endpoints públicos y protegidos sobre el *gin.Engine* recibido.
 func RegisterRoutes(r *gin.Engine, authUC *usecase.Auth, vaultUC *usecase.Vault, readyCheck func() error) {
+	// Evita warning de proxies y aplica CORS global (necesario para frontend en :5173)
+	_ = r.SetTrustedProxies(nil)
+	r.Use(cors.New(cors.Config{
+		AllowOrigins:     []string{"http://localhost:5173", "http://127.0.0.1:5173"},
+		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
+		ExposeHeaders:    []string{"Content-Length"},
+		AllowCredentials: true,
+		MaxAge:           12 * time.Hour,
+	}))
+
+	// Catch-all OPTIONS para preflight; evita 404 del navegador en CORS
+	r.OPTIONS("/*path", func(c *gin.Context) {
+		c.Status(http.StatusNoContent)
+	})
+
+	// --- Health / Ready ---
 	r.GET("/healthz", func(c *gin.Context) { c.JSON(http.StatusOK, gin.H{"ok": true}) })
 	r.GET("/readyz", func(c *gin.Context) {
 		if readyCheck != nil && readyCheck() != nil {
@@ -27,12 +48,12 @@ func RegisterRoutes(r *gin.Engine, authUC *usecase.Auth, vaultUC *usecase.Vault,
 	api.POST("/auth/register", func(c *gin.Context) {
 		var req dto.RegisterRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
-			c.JSON(400, gin.H{"error": err.Error()})
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
 		u, err := authUC.Register(req.Email, req.Password)
 		if err != nil {
-			c.JSON(400, gin.H{"error": err.Error()})
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
 		c.JSON(http.StatusCreated, u)
@@ -41,7 +62,7 @@ func RegisterRoutes(r *gin.Engine, authUC *usecase.Auth, vaultUC *usecase.Vault,
 	api.POST("/auth/login", func(c *gin.Context) {
 		var req dto.LoginRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
-			c.JSON(400, gin.H{"error": err.Error()})
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
 		token, u, err := authUC.Login(req.Email, req.Password)
@@ -52,11 +73,11 @@ func RegisterRoutes(r *gin.Engine, authUC *usecase.Auth, vaultUC *usecase.Vault,
 		c.JSON(http.StatusOK, gin.H{"access_token": token, "user": u})
 	})
 
-	// --- Protected group ---
+	// --- Grupo protegido ---
 	authGroup := api.Group("")
 	authGroup.Use(middleware.AuthRequired())
 
-	// users/me (simple: extrae "sub" de claims)
+	// users/me (lee claims del contexto que dejó el middleware)
 	authGroup.GET("/users/me", func(c *gin.Context) {
 		if claims, ok := c.Get("claims"); ok {
 			c.JSON(http.StatusOK, gin.H{"claims": claims})
@@ -65,7 +86,7 @@ func RegisterRoutes(r *gin.Engine, authUC *usecase.Auth, vaultUC *usecase.Vault,
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "claims not found"})
 	})
 
-	// vault CRUD
+	// --- Vault CRUD ---
 	v := authGroup.Group("/vault")
 
 	v.GET("/entries", func(c *gin.Context) {
@@ -76,22 +97,22 @@ func RegisterRoutes(r *gin.Engine, authUC *usecase.Auth, vaultUC *usecase.Vault,
 		offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
 		items, total, err := vaultUC.List(uid, q, domain, limit, offset)
 		if err != nil {
-			c.JSON(400, gin.H{"error": err.Error()})
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
-		c.JSON(200, gin.H{"items": items, "total": total})
+		c.JSON(http.StatusOK, gin.H{"items": items, "total": total})
 	})
 
 	v.POST("/entries", func(c *gin.Context) {
 		uid := userIDFromClaims(c)
 		var req dto.CreateSecretRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
-			c.JSON(400, gin.H{"error": err.Error()})
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
 		id, err := vaultUC.Create(uid, req.Username, req.PasswordPlain, req.URL, req.Notes, req.Icon, req.Title)
 		if err != nil {
-			c.JSON(400, gin.H{"error": err.Error()})
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
 		c.JSON(http.StatusCreated, gin.H{"id": id})
@@ -102,14 +123,14 @@ func RegisterRoutes(r *gin.Engine, authUC *usecase.Auth, vaultUC *usecase.Vault,
 		id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
 		s, err := vaultUC.Get(uid, id)
 		if err != nil {
-			c.JSON(400, gin.H{"error": err.Error()})
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
 		if s == nil {
-			c.JSON(404, gin.H{"error": "not found"})
+			c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
 			return
 		}
-		c.JSON(200, s)
+		c.JSON(http.StatusOK, s)
 	})
 
 	v.PUT("/entries/:id", func(c *gin.Context) {
@@ -117,28 +138,28 @@ func RegisterRoutes(r *gin.Engine, authUC *usecase.Auth, vaultUC *usecase.Vault,
 		id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
 		var req dto.UpdateSecretRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
-			c.JSON(400, gin.H{"error": err.Error()})
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
 		if err := vaultUC.Update(uid, id, req.Username, req.PasswordPlain, req.URL, req.Notes, req.Icon, req.Title); err != nil {
 			if err.Error() == "not found" {
-				c.JSON(404, gin.H{"error": "not found"})
+				c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
 			} else {
-				c.JSON(400, gin.H{"error": err.Error()})
+				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			}
 			return
 		}
-		c.JSON(200, gin.H{"ok": true})
+		c.JSON(http.StatusOK, gin.H{"ok": true})
 	})
 
 	v.DELETE("/entries/:id", func(c *gin.Context) {
 		uid := userIDFromClaims(c)
 		id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
 		if err := vaultUC.Delete(uid, id); err != nil {
-			c.JSON(400, gin.H{"error": err.Error()})
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
-		c.JSON(200, gin.H{"ok": true})
+		c.JSON(http.StatusOK, gin.H{"ok": true})
 	})
 }
 

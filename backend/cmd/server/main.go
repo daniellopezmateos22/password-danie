@@ -1,4 +1,4 @@
-// main: composition root. Abre SQLite, cablea repos/usecases y registra rutas/readyz.
+// Comentario: punto de entrada. Carga .env, abre SQLite, aplica migraciones, cablea repos/usecases y levanta Gin.
 package main
 
 import (
@@ -33,28 +33,28 @@ func main() {
 	}
 	defer sqlDB.Close()
 
-
-	//  APLICAR MIGRACIONES
+	// Migraciones (usa la ruta del contenedor final)
 	if err := db.ApplyMigrations(sqlDB, "/app/migrations"); err != nil {
 		log.Fatalf("apply migrations: %v", err)
 	}
 
-	// repos
+	// Repos
 	var (
 		userRepo   repository.UserRepo   = sqliteRepo.NewUserSQLite(sqlDB)
 		secretRepo repository.SecretRepo = sqliteRepo.NewSecretSQLite(sqlDB)
 	)
 
-	// usecases
+	// Casos de uso
 	authUC := usecase.NewAuth(userRepo)
 	vaultUC := usecase.NewVault(secretRepo)
 	resetUC := usecase.NewPasswordReset(userRepo)
 
-	// http
-	r := gin.Default()
-	ready := func() error { return sqlDB.Ping() }
+	// HTTP
+	r := gin.New()
+	r.Use(gin.Logger(), gin.Recovery())
 
-	api.RegisterRoutes(r, authUC, vaultUC, ready)
+	ready := func() error { return sqlDB.Ping() }
+	api.RegisterRoutes(r, authUC, vaultUC, ready) 
 	api.RegisterResetRoutes(r, resetUC)
 
 	log.Printf("listening on :%s (dsn=%s)", port, dsn)
