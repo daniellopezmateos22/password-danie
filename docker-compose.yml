@@ -1,0 +1,27 @@
+# Docker Compose: levanta backend (Go+SQLite) y frontend (Vite+React).
+services:
+  backend:
+    build: ./backend
+    environment:
+      - PORT=8080
+      - SQLITE_DSN=/data/app.db
+      - JWT_SECRET=change-me
+      - AES_KEY=0123456789abcdef0123456789abcdef
+    volumes:
+      - backend_data:/data
+    ports:
+      - "8080:8080"
+
+  frontend:
+    image: node:20-alpine
+    working_dir: /app
+    volumes:
+      - ./frontend:/app
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0"
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
+
+volumes:
+  backend_data:

@@ -1,8 +1,13 @@
-# OpenAPI inicial del MVP de password-danie (auth + vault + health/ready).
+
+---
+
+### 5) `backend/docs/openapi.yaml` (extendido con reset)
+```yaml
+# openapi.yaml: contrato de API — añade endpoints de password reset.
 openapi: 3.0.3
 info:
   title: password-danie API
-  version: 0.1.0
+  version: 0.1.1
 servers:
   - url: http://localhost:8080
 paths:
@@ -62,6 +67,39 @@ paths:
                       id: { type: integer }
                       email: { type: string }
 
+  /api/v1/auth/reset/request:
+    post:
+      summary: Solicita reset de contraseña (devuelve token de ejemplo)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string, format: email }
+      responses:
+        "200": { description: OK }
+        "400": { description: Bad request }
+
+  /api/v1/auth/reset/confirm:
+    post:
+      summary: Confirma reset con token + nueva contraseña
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token, new_password]
+              properties:
+                token: { type: string }
+                new_password: { type: string, minLength: 8 }
+      responses:
+        "200": { description: OK }
+        "400": { description: Bad request }
+
   /api/v1/users/me:
     get:
       summary: Perfil propio
@@ -75,10 +113,18 @@ paths:
       summary: Listar secretos
       security: [{ bearerAuth: [] }]
       parameters:
-        - in: query; name: q; schema: { type: string }
-        - in: query; name: domain; schema: { type: string }
-        - in: query; name: limit; schema: { type: integer, default: 20 }
-        - in: query; name: offset; schema: { type: integer, default: 0 }
+        - in: query
+          name: q
+          schema: { type: string }
+        - in: query
+          name: domain
+          schema: { type: string }
+        - in: query
+          name: limit
+          schema: { type: integer, default: 20 }
+        - in: query
+          name: offset
+          schema: { type: integer, default: 0 }
       responses:
         "200": { description: OK }
         "401": { description: Unauthorized }
@@ -108,7 +154,10 @@ paths:
       summary: Obtener secreto
       security: [{ bearerAuth: [] }]
       parameters:
-        - in: path; name: id; required: true; schema: { type: integer }
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
       responses:
         "200": { description: OK }
         "404": { description: Not found }
@@ -117,7 +166,10 @@ paths:
       summary: Actualizar secreto
       security: [{ bearerAuth: [] }]
       parameters:
-        - in: path; name: id; required: true; schema: { type: integer }
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
       requestBody:
         required: true
         content:
@@ -139,7 +191,10 @@ paths:
       summary: Eliminar secreto
       security: [{ bearerAuth: [] }]
       parameters:
-        - in: path; name: id; required: true; schema: { type: integer }
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
       responses:
         "200": { description: OK }
         "401": { description: Unauthorized }
