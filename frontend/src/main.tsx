@@ -1,10 +1,20 @@
-// Entry point de React: monta <App /> en el div#root.
-import React from 'react'
-import ReactDOM from 'react-dom/client'
-import App from './App'
+// punto de entrada de React; monta el router.
+import React from "react";
+import ReactDOM from "react-dom/client";
+import { createBrowserRouter, RouterProvider } from "react-router-dom";
+import App from "./App";
+import AuthPage from "./pages/AuthPage";
+import VaultPage from "./pages/VaultPage";
 
-ReactDOM.createRoot(document.getElementById('root')!).render(
+const router = createBrowserRouter([
+  { path: "/", element: <App />, children: [
+    { index: true, element: <AuthPage /> },
+    { path: "/vault", element: <VaultPage /> },
+  ]},
+]);
+
+ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <App />
+    <RouterProvider router={router} />
   </React.StrictMode>
-)
+);
