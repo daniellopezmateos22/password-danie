@@ -110,7 +110,7 @@ Una vez dentro, crea los archivos de entorno:
 
 backend/.env → usa el ejemplo de arriba (PORT, JWT_SECRET, AES_KEY, etc).
 
-frontend/.env.local → apunta a tu API pública de Codespaces:
+frontend/.env.local → apunta a tu API pública de Codespaces: https://cautious-space-train-qw5p4gwgrv6c46pv-5173.app.github.dev/
 
 ---
 
@@ -200,6 +200,7 @@ VITE_API_BASE_URL=http://localhost:8080
 
 ## 👨‍💻 Autor
 **Daniel López Mateos**  
+
 
 
 
