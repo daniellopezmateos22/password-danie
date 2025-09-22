@@ -1,4 +1,4 @@
-// Caso de uso de password reset: generar token de recuperación y confirmar cambio de contraseña.
+// Caso de uso de password reset: generar token y confirmar con valores (no punteros) en el dominio.
 package usecase
 
 import (
@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
-
 	"password-danie/internal/repository"
 )
 
@@ -16,11 +15,8 @@ type PasswordReset struct {
 	users repository.UserRepo
 }
 
-func NewPasswordReset(users repository.UserRepo) *PasswordReset {
-	return &PasswordReset{users: users}
-}
+func NewPasswordReset(users repository.UserRepo) *PasswordReset { return &PasswordReset{users: users} }
 
-// Request genera un token temporal y lo guarda en el usuario.
 func (pr *PasswordReset) Request(email string) (string, error) {
 	u, err := pr.users.GetByEmail(email)
 	if err != nil {
@@ -31,21 +27,19 @@ func (pr *PasswordReset) Request(email string) (string, error) {
 	}
 	token := randomToken(32)
 	exp := time.Now().Add(1 * time.Hour)
-
-	// actualizar en BD (requiere UpdateReset en UserRepo)
 	if err := pr.users.UpdateReset(u.ID, &token, &exp); err != nil {
 		return "", err
 	}
 	return token, nil
 }
 
-// Confirm valida el token y actualiza el password.
 func (pr *PasswordReset) Confirm(token, newPassword string) error {
 	u, err := pr.users.GetByResetToken(token)
 	if err != nil {
 		return err
 	}
-	if u == nil || u.ResetExpiresAt == nil || time.Now().After(*u.ResetExpiresAt) {
+	// Validar existencia y expiración usando valores
+	if u == nil || u.ResetToken == "" || u.ResetExpiresAt.IsZero() || time.Now().After(u.ResetExpiresAt) {
 		return errors.New("invalid or expired token")
 	}
 	hash, _ := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)

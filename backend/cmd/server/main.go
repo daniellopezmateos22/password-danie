@@ -2,7 +2,6 @@
 package main
 
 import (
-	"database/sql"
 	"log"
 	"os"
 
@@ -23,6 +22,10 @@ func main() {
 	if dsn == "" {
 		dsn = "data/app.db"
 	}
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
 
 	sqlDB, err := db.OpenSQLite(dsn)
 	if err != nil {
@@ -39,19 +42,17 @@ func main() {
 	// usecases
 	authUC := usecase.NewAuth(userRepo)
 	vaultUC := usecase.NewVault(secretRepo)
+	resetUC := usecase.NewPasswordReset(userRepo)
 
 	// http
 	r := gin.Default()
 	ready := func() error { return sqlDB.Ping() }
 
 	api.RegisterRoutes(r, authUC, vaultUC, ready)
+	api.RegisterResetRoutes(r, resetUC)
 
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080"
-	}
-	log.Printf("listening on :%s", port)
+	log.Printf("listening on :%s (dsn=%s)", port, dsn)
 	if err := r.Run(":" + port); err != nil {
-		log.Fatal(err)
+		log.Fatalf("http server: %v", err)
 	}
 }
