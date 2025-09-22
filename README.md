@@ -72,8 +72,7 @@ AES_KEY=0123456789abcdef0123456789abcdef
 ACCESS_TOKEN_TTL=15m
 REFRESH_TOKEN_TTL=168h
 ```
-```
-Ejemplo .env.local en frontend/ (solo para Codespaces/local dev):
+```Ejemplo .env.local en frontend/ (solo para Codespaces/local dev):
 VITE_API_BASE_URL=http://localhost:8080
 En Codespaces se recomienda generar dinámicamente esta variable:
 VITE_API_BASE_URL=https://${CODESPACE_NAME}-8080.app.github.dev
@@ -197,5 +196,6 @@ VITE_API_BASE_URL=http://localhost:8080
 
 ## 👨‍💻 Autor
 **Daniel López Mateos**  
+
 
 
